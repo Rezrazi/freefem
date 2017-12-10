@@ -9,6 +9,14 @@
   <meta name="description" content="A rail is used to show accompanying content outside the boundaries of the main view of a site">
   <meta name="keywords" content="html5, ui, library, framework, javascript">
   <link rel="stylesheet" type="text/css" class="ui" href="assets/semantic.min.css">
+  <link rel="apple-touch-icon" sizes="180x180" href="favicons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="favicons/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="favicons/favicon-16x16.png">
+  <link rel="manifest" href="favicons/manifest.json">
+  <link rel="mask-icon" href="favicons/safari-pinned-tab.svg" color="#000000">
+  <link rel="shortcut icon" href="favicons/favicon.ico">
+  <meta name="msapplication-config" content="favicons/browserconfig.xml">
+  <meta name="theme-color" content="#ffffff">
 </head>
 
 <body id="example" class="basic minimal pushable" ontouchstart="">
@@ -35,7 +43,7 @@
                 <a class="bug icon item" data-content="Voir le code source" href="#code" title="Voir le code source">
                   <i class="code icon"></i>
                 </a>
-                <a class="bug icon item" data-content="Voir le code source sur Github" href="#code" title="Voir le code source sur Github">
+                <a class="bug icon item" data-content="Voir le code source sur Github" href="https://github.com/Rezrazi/freefem" title="Voir le code source sur Github">
                   <i class="github icon"></i>
                 </a>
               </div>
@@ -180,6 +188,9 @@ for(int j=0;j&lt;=M;j++){
 }
             </code></pre> On exporte les valeurs dans finchier texte sous forme de tableau en Markdown pour la facilité de sa mise en forme.
             <h2 class="ui dividing header">Tableau des erreurs</h2>
+            <div class="ui warning message">
+              <p>Evalué uniquement pour le 2ème cas de U0</p>
+            </div>
             <table class="ui celled striped table">
               <thead>
                 <tr>
@@ -498,6 +509,10 @@ for(int j=0;j&lt;=M;j++){
                 </tr>
               </tbody>
             </table>
+            <div class="ui success message">
+              <p>Visualisation de la solution exacte sans condition initiale</p>
+            </div>
+            <img src="images/exact.gif" alt="">
           </div>
 
 
