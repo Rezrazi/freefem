@@ -1,0 +1,79 @@
+// ID
+string fname = "sincos";
+//-------------------------
+// Domaine et maillage
+//-------------------------
+
+real[int] edges = [-2,2,-2,2]; // Coins du domaine
+int n = 50; // Nombre d'elements 
+mesh pave = square(n,n,[edges[0]+(edges[1]-edges[0])*x,edges[2]+(edges[3]-edges[2])*y]); // Maillage rectangulaire
+int BORDURE = 10;
+int[int] labels = [1,BORDURE,2,BORDURE,3,BORDURE,4,BORDURE] ;
+pave = change(pave,label=labels);
+savemesh(pave,"pave.msh");
+plot(pave,ps="pave.png"); // Graphique et exportation
+
+//-------------------------
+
+//-------------------------
+// Constantes et espace elements finis
+//-------------------------
+real t=0,T = 1.; // [0,T] Temps
+int M = 50; // Nombre d'elements temps
+real dt = T/M; // Pas de discretisation
+real alpha = 1; // Conductivite thermique
+int i = 0; // Index
+
+fespace VH(pave,P2);
+VH u,v,old,f,uex;
+
+//-------------------------
+// Condition initiales
+//-------------------------
+VH[int] uh(M+2); // Vecteur regroupant les valeurs de uh
+uh[0] = 3*sin(x)+5*cos(y); // Valeur initiale de uh a t=0
+old = uh[0];
+
+//-------------------------
+// Calcul et exportation
+//-------------------------
+
+// Formulation variationnelle du probleme
+problem thermic(u,v)=
+int2d(pave)(dt*alpha*(dx(u)*dx(v)+dy(u)*dy(v)))
++int2d(pave)(u*v)
+-int2d(pave)(old*v)
++on(BORDURE,u=0);
+
+// Erreurs
+real[int] errL2(M+1);
+real[int] errL2P(M+1);
+real[int] errH1(M+1);
+// Calcul en temps discretise
+for(i;i<=M;i++){
+	t=i*dt; // Incrementation du temps
+	f = x ^ 2 * y ^ 2 - 2 * t * x ^ 2 - 2 * t * y ^ 2 + 14 * x ^ 2 + 14 * y ^ 2 + 16 * t - 128; // Fonction second membre qui change en fonction de t
+	uex = (x ^ 2 - 4) * (y ^ 2 - 4) * (t - 9); // Solution exacte evaluee avec Matlab auparavant
+	thermic; // Résolution du probleme
+	plot(u,wait=0,fill=1,cmm="t="+t,ps="snapshots/"+fname+"_"+i+"_frame_t"+t+".png"); // Graphique et exportation
+	old = u; // On remplace la valeur de U(m-1) par U(m)
+	uh[i+1] = old; // (Facultatif)
+	
+	// Evaluation des erreurs
+	errL2[i] = sqrt(int2d(pave)((u-uex)^2));
+	errH1[i] = sqrt(int2d(pave)((dx(u)-dx(uex))^2+(dy(u)-dy(uex))^2));
+	errL2P[i] = errL2[i]/sqrt(int2d(pave)((dx(u)+dy(u))^2));
+}
+// Exportation des erreurs
+// Entete de fichier en Markdown
+{
+	ofstream f("evaluated_log.txt");
+	f << "| T Value | L2 Evaluated Difference | H1 Evaluated Difference | L2 Evaluated Percentage   |" << endl;
+	f << "|---------|-------------------------|-------------------------|---------------------------|" << endl;
+};
+for(int j=0;j<=M;j++){
+	{
+   		ofstream f("evaluated_log.txt",append);
+   		f << "|"+j*dt+"|"+errL2[j]+"|"+errH1[j]+"|"+errL2[j]/errL2P[j]+"|" <<endl;
+ 	};
+}

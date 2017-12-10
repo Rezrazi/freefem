@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1">
+  <title>Equation de Chaleur sur FreeFem++</title>
+  <meta name="description" content="A rail is used to show accompanying content outside the boundaries of the main view of a site">
+  <meta name="keywords" content="html5, ui, library, framework, javascript">
+  <link rel="stylesheet" type="text/css" class="ui" href="assets/semantic.min.css">
+</head>
+
+<body id="example" class="basic minimal pushable" ontouchstart="">
+  <div class="pusher">
+    <div class="full height">
+      <div class="article">
+        <div class="ui masthead vertical segment">
+          <div class="ui container">
+            <div class="introduction">
+
+              <h1 class="ui header">
+                Equation de Chaleur sur FreeFem++
+                <div class="sub header">
+                  Réalisée par <b>Charaf Rezrazi</b> et <b>Ayoub Outaghat</b>
+                </div>
+              </h1>
+              <div class="ui hidden divider"></div>
+
+              <div class="ui right floated main menu">
+                <a class="bug icon item" data-content="Voir l'animation" href="#animation" title="Voir l'animation">
+                  <i class="video play outline icon"></i>
+                </a>
+
+                <a class="bug icon item" data-content="Voir le code source" href="#code" title="Voir le code source">
+                  <i class="code icon"></i>
+                </a>
+                <a class="bug icon item" data-content="Voir le code source sur Github" href="#code" title="Voir le code source sur Github">
+                  <i class="github icon"></i>
+                </a>
+              </div>
+              <a class="ui download labeled icon primary button">
+                <i class="file archive outline icon"></i>
+                Télécharger ZIP
+              </a>
+            </div>
+          </div>
+        </div>
+        <div class="bsa-cpc"></div>
+        <div class="main ui container">
+          <div class="introduction">
+            <h2 class="ui dividing header">Problème traité</h2>
+            <p>
+              Dans ce qui suit, nous allons formuler une résolution d'une équation mise sous la forme suivante : $$\begin{cases} \frac{\partial u(x,y,t)}{\partial t} - \alpha\triangle u(x,y,t) = f(x,y,t) & ((x,y),t) \in \omega\times ]0,T[ \\u(x,y,t)=0 & ((x,y),t)\in\delta\omega\times]0,T[
+              \\u(x,y,0)=u_{0}(x,y) & ((x,y),t)\in\omega \end{cases}$$
+            </p>
+            <p>
+              Ceci revient à une formulation variationnelle : $$\int_{\omega}\frac{u^{m-1}v}{\triangle t} -\int_{\omega}\frac{u^{m}v}{\triangle t} -\alpha\int_{\omega}\triangledown u \triangledown v = \int_{\omega}fv$$
+            </p>
+            <h2 class="ui dividing header">Maillage</h2>
+            <img src="images/pave.png" alt="Maillage du pavé" style="width:100%;">
+            <h2 class="ui dividing header">Solution exacte et second membre</h2> A partir d'un script Maple, on reproduit l'équation pour une fonction donnée : $$u_{exacte}(x,y,t)=(x ^ 2 - 4) * (y ^ 2 - 4) * (t - 9)$$ Qui par la suite nous retourne la fonction second membre qu'on va utiliser dans notre équation: $$f(x,y,t)=
+            x ^ 2 * y ^ 2 - 2 * t * x ^ 2 - 2 * t * y ^ 2 + 14 * x ^ 2 + 14 * y ^ 2 + 16 * t - 128$$ Pour la valeur initiale de la solution, nous allons visualiser la variation pour chaque cas.
+            <h2 class="ui dividing header" id="animation">Visualisation</h2>
+            <div class="ui info message">
+              <div class="header">
+                # 1er cas de $u_{0}$
+              </div>
+              <p>
+                $$3sin(x)+5cos(y)$$
+              </p>
+            </div>
+            <p>
+              <img src="images/sincos.gif" alt="">
+            </p>
+            <div class="ui info message">
+              <div class="header">
+                # 2ème cas de $u_{0}$
+              </div>
+              <p>
+                $$3exp(x)+5exp(y)$$
+              </p>
+            </div>
+            <p>
+              <img src="images/exp.gif" alt="">
+            </p>
+            <div class="ui info message">
+              <div class="header">
+                # 3ème cas de $u_{0}$
+              </div>
+              <p>
+                $$\frac{1}{sin(x)+3}+3^y$$
+              </p>
+            </div>
+            <p>
+              <img src="images/random.gif" alt="">
+            </p>
+            <h2 class="ui dividing header" id="code">Explication du code</h2>
+            <pre><code class="language-cpp">
+//-------------------------
+// Domaine et maillage
+//-------------------------
+
+real[int] edges = [-2,2,-2,2]; // Coins du domaine
+int n = 50; // Nombre d'elements
+mesh pave = square(n,n,[edges[0]+(edges[1]-edges[0])*x,edges[2]+(edges[3]-edges[2])*y]); // Maillage rectangulaire
+int BORDURE = 10;
+int[int] labels = [1,BORDURE,2,BORDURE,3,BORDURE,4,BORDURE] ;
+pave = change(pave,label=labels);
+savemesh(pave,"pave.msh");
+plot(pave,ps="pave.png"); // Graphique et exportation
+            </code></pre> Dans cette partie, le domaine rectangulaire est défini, ainsi que une généralisation de la bordure, et le nombre d'éléments du maillage. On exporte par la suite le maillage.
+            <pre><code class="language-cpp">
+//-------------------------
+// Constantes et espace elements finis
+//-------------------------
+real t=0,T = 1.; // [0,T] Temps
+int M = 50; // Nombre d'elements temps
+real dt = T/M; // Pas de discretisation
+real alpha = 1; // Conductivite thermique
+int i = 0; // Index
+
+fespace VH(pave,P2);
+VH u,v,old,f,uex;
+
+//-------------------------
+// Condition initiales
+//-------------------------
+VH[int] uh(M+2); // Vecteur regroupant les valeurs de uh
+uh[0] = exp(x)*exp(y); // Valeur initiale de uh a t=0
+old = uh[0];
+            </code></pre> Ici on definit les constantes ainsi que la valeur de la solution à t=0.
+            <pre><code class="language-cpp">
+//-------------------------
+// Calcul et exportation
+//-------------------------
+
+// Formulation variationnelle du probleme
+problem thermic(u,v)=
+int2d(pave)(dt*alpha*(dx(u)*dx(v)+dy(u)*dy(v)))
++int2d(pave)(u*v)
+-int2d(pave)(old*v)
++on(BORDURE,u=0);
+            </code></pre> La formulation variationnelle traduite en syntaxe FreeFem++
+            <pre><code class="language-cpp">
+// Erreurs
+real[int] errL2(M+1);
+real[int] errL2P(M+1);
+real[int] errH1(M+1);
+// Calcul en temps discretise
+for(i;i&lt;=M;i++){
+	t=i*dt; // Incrementation du temps
+	f = x ^ 2 * y ^ 2 - 2 * t * x ^ 2 - 2 * t * y ^ 2 + 14 * x ^ 2 + 14 * y ^ 2 + 16 * t - 128; // Fonction second membre qui change en fonction de t
+	uex = (x ^ 2 - 4) * (y ^ 2 - 4) * (t - 9); // Solution exacte evaluee avec Matlab auparavant
+	thermic; // Résolution du probleme
+	//plot(u,wait=0,fill=1,cmm="t="+t,ps="snapshots/"+fname+"_"+i+"_frame_t"+t+".png"); // Graphique et exportation
+	old = u; // On remplace la valeur de U(m-1) par U(m)
+	uh[i+1] = old; // (Facultatif)
+
+	// Evaluation des erreurs
+	errL2[i] = sqrt(int2d(pave)((u-uex)^2));
+	errH1[i] = sqrt(int2d(pave)((dx(u)-dx(uex))^2+(dy(u)-dy(uex))^2));
+	errL2P[i] = errL2[i]/sqrt(int2d(pave)((dx(u)+dy(u))^2));
+}
+            </code></pre> Dans cette partie, on définit des tableaux qui vont contenir les valeurs des distances. Ainsi que la fonction second membre calculée avec Maple à partir d'une solution exacte aussi définie. Les deux fonctions ont
+            été définies à l'intérieur de la boucle car elles sont dépendentes de t.
+            <pre><code class="language-cpp">
+// Exportation des erreurs
+// Entete de fichier en Markdown
+{
+	ofstream f("evaluated_log.txt");
+	f &lt;&lt; "| T Value | L2 Evaluated Difference | H1 Evaluated Difference | L2 Evaluated Percentage   |" &lt;&lt; endl;
+	f &lt;&lt; "|---------|-------------------------|-------------------------|---------------------------|" &lt;&lt; endl;
+};
+for(int j=0;j&lt;=M;j++){
+	{
+   		ofstream f("evaluated_log.txt",append);
+   		f &lt;&lt; "|"+j*dt+"|"+errL2[j]+"|"+errH1[j]+"|"+errL2[j]/errL2P[j]+"|" &lt;&lt;endl;
+ 	};
+}
+            </code></pre> On exporte les valeurs dans finchier texte sous forme de tableau en Markdown pour la facilité de sa mise en forme.
+            <h2 class="ui dividing header">Tableau des erreurs</h2>
+            <table class="ui celled striped table">
+              <thead>
+                <tr>
+                  <th>T Value</th>
+                  <th>L2 Evaluated Difference</th>
+                  <th>H1 Evaluated Difference</th>
+                  <th>L2 Evaluated Percentage</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>0</td>
+                  <td>317.952</td>
+                  <td>356.388</td>
+                  <td>29.0086</td>
+                </tr>
+                <tr>
+                  <td>0.02</td>
+                  <td>316.983</td>
+                  <td>354.851</td>
+                  <td>22.8965</td>
+                </tr>
+                <tr>
+                  <td>0.04</td>
+                  <td>316.029</td>
+                  <td>353.615</td>
+                  <td>20.0583</td>
+                </tr>
+                <tr>
+                  <td>0.06</td>
+                  <td>315.086</td>
+                  <td>352.465</td>
+                  <td>18.1924</td>
+                </tr>
+                <tr>
+                  <td>0.08</td>
+                  <td>314.153</td>
+                  <td>351.36</td>
+                  <td>16.7931</td>
+                </tr>
+                <tr>
+                  <td>0.1</td>
+                  <td>313.228</td>
+                  <td>350.281</td>
+                  <td>15.6692</td>
+                </tr>
+                <tr>
+                  <td>0.12</td>
+                  <td>312.31</td>
+                  <td>349.223</td>
+                  <td>14.7279</td>
+                </tr>
+                <tr>
+                  <td>0.14</td>
+                  <td>311.399</td>
+                  <td>348.179</td>
+                  <td>13.9172</td>
+                </tr>
+                <tr>
+                  <td>0.16</td>
+                  <td>310.495</td>
+                  <td>347.149</td>
+                  <td>13.2051</td>
+                </tr>
+                <tr>
+                  <td>0.18</td>
+                  <td>309.597</td>
+                  <td>346.129</td>
+                  <td>12.5704</td>
+                </tr>
+                <tr>
+                  <td>0.2</td>
+                  <td>308.705</td>
+                  <td>345.119</td>
+                  <td>11.9982</td>
+                </tr>
+                <tr>
+                  <td>0.22</td>
+                  <td>307.818</td>
+                  <td>344.117</td>
+                  <td>11.4776</td>
+                </tr>
+                <tr>
+                  <td>0.24</td>
+                  <td>306.936</td>
+                  <td>343.124</td>
+                  <td>11.0005</td>
+                </tr>
+                <tr>
+                  <td>0.26</td>
+                  <td>306.06</td>
+                  <td>342.138</td>
+                  <td>10.5605</td>
+                </tr>
+                <tr>
+                  <td>0.28</td>
+                  <td>305.189</td>
+                  <td>341.159</td>
+                  <td>10.1526</td>
+                </tr>
+                <tr>
+                  <td>0.3</td>
+                  <td>304.323</td>
+                  <td>340.186</td>
+                  <td>9.77279</td>
+                </tr>
+                <tr>
+                  <td>0.32</td>
+                  <td>303.461</td>
+                  <td>339.219</td>
+                  <td>9.41772</td>
+                </tr>
+                <tr>
+                  <td>0.34</td>
+                  <td>302.604</td>
+                  <td>338.258</td>
+                  <td>9.08462</td>
+                </tr>
+                <tr>
+                  <td>0.36</td>
+                  <td>301.751</td>
+                  <td>337.302</td>
+                  <td>8.77118</td>
+                </tr>
+                <tr>
+                  <td>0.38</td>
+                  <td>300.902</td>
+                  <td>336.352</td>
+                  <td>8.47541</td>
+                </tr>
+                <tr>
+                  <td>0.4</td>
+                  <td>300.058</td>
+                  <td>335.407</td>
+                  <td>8.19564</td>
+                </tr>
+                <tr>
+                  <td>0.42</td>
+                  <td>299.218</td>
+                  <td>334.467</td>
+                  <td>7.93042</td>
+                </tr>
+                <tr>
+                  <td>0.44</td>
+                  <td>298.381</td>
+                  <td>333.531</td>
+                  <td>7.67846</td>
+                </tr>
+                <tr>
+                  <td>0.46</td>
+                  <td>297.548</td>
+                  <td>332.6</td>
+                  <td>7.43868</td>
+                </tr>
+                <tr>
+                  <td>0.48</td>
+                  <td>296.719</td>
+                  <td>331.673</td>
+                  <td>7.2101</td>
+                </tr>
+                <tr>
+                  <td>0.5</td>
+                  <td>295.894</td>
+                  <td>330.75</td>
+                  <td>6.99185</td>
+                </tr>
+                <tr>
+                  <td>0.52</td>
+                  <td>295.072</td>
+                  <td>329.832</td>
+                  <td>6.78317</td>
+                </tr>
+                <tr>
+                  <td>0.54</td>
+                  <td>294.254</td>
+                  <td>328.917</td>
+                  <td>6.58339</td>
+                </tr>
+                <tr>
+                  <td>0.56</td>
+                  <td>293.438</td>
+                  <td>328.007</td>
+                  <td>6.39188</td>
+                </tr>
+                <tr>
+                  <td>0.58</td>
+                  <td>292.626</td>
+                  <td>327.1</td>
+                  <td>6.2081</td>
+                </tr>
+                <tr>
+                  <td>0.6</td>
+                  <td>291.818</td>
+                  <td>326.196</td>
+                  <td>6.03155</td>
+                </tr>
+                <tr>
+                  <td>0.62</td>
+                  <td>291.012</td>
+                  <td>325.296</td>
+                  <td>5.86178</td>
+                </tr>
+                <tr>
+                  <td>0.64</td>
+                  <td>290.209</td>
+                  <td>324.4</td>
+                  <td>5.69837</td>
+                </tr>
+                <tr>
+                  <td>0.66</td>
+                  <td>289.41</td>
+                  <td>323.507</td>
+                  <td>5.54096</td>
+                </tr>
+                <tr>
+                  <td>0.68</td>
+                  <td>288.613</td>
+                  <td>322.617</td>
+                  <td>5.38921</td>
+                </tr>
+                <tr>
+                  <td>0.7</td>
+                  <td>287.818</td>
+                  <td>321.73</td>
+                  <td>5.24279</td>
+                </tr>
+                <tr>
+                  <td>0.72</td>
+                  <td>287.027</td>
+                  <td>320.846</td>
+                  <td>5.10143</td>
+                </tr>
+                <tr>
+                  <td>0.74</td>
+                  <td>286.238</td>
+                  <td>319.965</td>
+                  <td>4.96486</td>
+                </tr>
+                <tr>
+                  <td>0.76</td>
+                  <td>285.452</td>
+                  <td>319.087</td>
+                  <td>4.83283</td>
+                </tr>
+                <tr>
+                  <td>0.78</td>
+                  <td>284.668</td>
+                  <td>318.212</td>
+                  <td>4.70511</td>
+                </tr>
+                <tr>
+                  <td>0.8</td>
+                  <td>283.887</td>
+                  <td>317.34</td>
+                  <td>4.58151</td>
+                </tr>
+                <tr>
+                  <td>0.82</td>
+                  <td>283.108</td>
+                  <td>316.47</td>
+                  <td>4.46182</td>
+                </tr>
+                <tr>
+                  <td>0.84</td>
+                  <td>282.331</td>
+                  <td>315.603</td>
+                  <td>4.34586</td>
+                </tr>
+                <tr>
+                  <td>0.86</td>
+                  <td>281.557</td>
+                  <td>314.738</td>
+                  <td>4.23347</td>
+                </tr>
+                <tr>
+                  <td>0.88</td>
+                  <td>280.785</td>
+                  <td>313.876</td>
+                  <td>4.12448</td>
+                </tr>
+                <tr>
+                  <td>0.9</td>
+                  <td>280.015</td>
+                  <td>313.016</td>
+                  <td>4.01876</td>
+                </tr>
+                <tr>
+                  <td>0.92</td>
+                  <td>279.247</td>
+                  <td>312.159</td>
+                  <td>3.91617</td>
+                </tr>
+                <tr>
+                  <td>0.94</td>
+                  <td>278.481</td>
+                  <td>311.304</td>
+                  <td>3.81658</td>
+                </tr>
+                <tr>
+                  <td>0.96</td>
+                  <td>277.718</td>
+                  <td>310.451</td>
+                  <td>3.71986</td>
+                </tr>
+                <tr>
+                  <td>0.98</td>
+                  <td>276.956</td>
+                  <td>309.6</td>
+                  <td>3.62591</td>
+                </tr>
+                <tr>
+                  <td>1</td>
+                  <td>276.196</td>
+                  <td>308.752</td>
+                  <td>3.53461</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+
+          <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+          <script src='https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.2/MathJax.js?config=TeX-MML-AM_CHTML'></script>
+          <script type="text/x-mathjax-config">
+            MathJax.Hub.Config({ tex2jax: {inlineMath: [['$','$'], ['\\(','\\)']]} });
+          </script>
+          <script src="assets/semantic.min.js"></script>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+
+</html>
